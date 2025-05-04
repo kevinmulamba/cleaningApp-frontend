@@ -1,13 +1,14 @@
 const request = require("supertest");
 const { app, server, closeDatabase } = require("../../../server");
 
-// Fermer la base MongoDB et le serveur après tous les tests
+// Fermer proprement la base MongoDB et le serveur après tous les tests
 afterAll(async () => {
   await closeDatabase();
   server.close();
 });
 
 describe("Tests de la route /api/providers", () => {
+
   test("GET /api/providers doit retourner un 200", async () => {
     const response = await request(app).get("/api/providers");
     expect(response.statusCode).toBe(200);
@@ -38,5 +39,6 @@ describe("Tests de la route /api/providers", () => {
     expect(response.statusCode).toBe(400);
     expect(response.body).toHaveProperty("message");
   });
+
 });
 

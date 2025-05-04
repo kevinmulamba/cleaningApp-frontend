@@ -1,40 +1,107 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const reservationSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  provider: { type: mongoose.Schema.Types.ObjectId, ref: 'Provider', required: true },
-  date: { type: Date, required: true },
-  service: { type: String, required: true },
-  location: { type: String, required: true },
-  status: { type: String, enum: ['en attente', 'attribuée', 'en cours', 'terminée', 'annulée'], default: 'en attente' },
-  categorie: {
+  client: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  provider: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Provider',
+  },
+  date: {
+    type: String, // Date + heure combinées simplifiées
+    required: true,
+  },
+  heure: {
+    type: String,
+    required: true,
+  },
+  adresse: {
+    type: String,
+    required: true,
+  },
+  service: {
+    type: String,
+    required: true,
+  },
+
+  validationPin: {
+    type: String,
+  },
+
+  paid: {
+    type: Boolean,
+    default: false,
+  },
+
+  status: {
     type: String,
     enum: [
-      'Nettoyage maison',
-      'Nettoyage appartement',
-      'Repassage',
-      'Vitres',
-      'Ménage complet',
-      'Désinfection',
-      'Nettoyage extérieur voiture',
-      'Nettoyage intérieur voiture',
-      'Nettoyage tapis',
-      'Nettoyage bureaux',
-      'Nettoyage industriel',
-      'Nettoyage après déménagement',
-      'Nettoyage après travaux',
-      'Nettoyage d’événements',
-      'Nettoyage espaces verts',
-      'Entretien piscine',
-      'Dépoussiérage mobilier',
-      'Lessive et linge',
-      'Entretien parties communes'
+      'draft',
+      'pending',
+      'confirmed',
+      'cancelled',
+      'en attente',
+      'attribuée',
+      'en cours',
+      'terminée',
+      'annulée',
+      'refused',
+      'en_attente_prestataire',
+      'en_attente_estimation',
     ],
-    required: true
+    default: 'draft',
   },
-  price: { type: Number, required: true },
-  discountApplied: { type: Boolean, default: false }
-}, { timestamps: true });
+
+  categorie: {
+    type: String,
+    required: true,
+  },
+
+  surface: {
+    type: Number,
+  },
+
+  niveauSalete: {
+    type: String,
+    enum: ['faible', 'modere', 'important', 'critique', 'sale'], // ✅ Ajout temporaire pour Stripe
+  },
+
+  options: {
+    type: Object,
+    default: {},
+  },
+
+  photos: {
+    type: [String],
+    default: [],
+  },
+
+  prixTotal: {
+    type: Number,
+  },
+  partPrestataire: {
+    type: Number,
+  },
+  partPlateforme: {
+    type: Number,
+  },
+
+  discountApplied: {
+    type: Boolean,
+    default: false,
+  },
+
+  reprogrammed: {
+    type: Boolean,
+    default: false,
+  },
+
+}, {
+  timestamps: true,
+});
 
 module.exports = mongoose.model('Reservation', reservationSchema);
 

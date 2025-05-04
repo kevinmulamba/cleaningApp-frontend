@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
-const User = require('../models/User'); 
+const User = require('../models/User');
 const verifyToken = require('../middlewares/authMiddleware');
+const bcrypt = require("bcryptjs");
 const shortid = require('shortid');
 
 // ✅ Route de test
@@ -11,13 +12,16 @@ router.get('/test', (req, res) => {
 });
 
 // ✅ Routes utilisant le contrôleur
-router.get('/users', userController.getUsers);
-router.get('/users/:id', userController.getUserById);
-router.post('/:id/favorite-provider', userController.addFavoriteProvider);
+router.get('/users', verifyToken, userController.getUsers); // 🔐 Protégé
+router.get('/users/:id', verifyToken, userController.getUserById); // 🔐 Protégé
+router.post('/:id/favorite-provider', verifyToken, userController.addFavoriteProvider); // 🔐 Protégé
 
-// ✅ Route pour récupérer tous les utilisateurs
-router.get('/all-users', async (req, res) => {
+// ✅ Route pour récupérer tous les utilisateurs (admin recommandé)
+router.get('/all-users', verifyToken, async (req, res) => {
     try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: "⛔ Accès refusé" });
+        }
         const users = await User.find();
         res.json({ message: "📜 Liste des utilisateurs", users });
     } catch (error) {
@@ -41,8 +45,11 @@ router.post('/users', async (req, res) => {
 });
 
 // ✅ Modifier un utilisateur
-router.put('/users/:id', async (req, res) => {
+router.put('/users/:id', verifyToken, async (req, res) => {
     try {
+        if (req.user.id !== req.params.id && req.user.role !== 'admin') {
+            return res.status(403).json({ message: "⛔ Accès refusé" });
+        }
         const { name, email } = req.body;
         if (!name || !email) {
             return res.status(400).json({ message: "❌ Nom et email requis" });
@@ -62,8 +69,11 @@ router.put('/users/:id', async (req, res) => {
 });
 
 // ✅ Supprimer un utilisateur
-router.delete('/users/:id', async (req, res) => {
+router.delete('/users/:id', verifyToken, async (req, res) => {
     try {
+        if (req.user.id !== req.params.id && req.user.role !== 'admin') {
+            return res.status(403).json({ message: "⛔ Accès refusé" });
+        }
         const user = await User.findById(req.params.id);
         if (!user) {
             return res.status(404).json({ message: "Utilisateur non trouvé" });
@@ -91,7 +101,7 @@ router.get('/admin/users', verifyToken, async (req, res) => {
 // ✅ ADMIN : Modifier un utilisateur
 router.put('/admin/users/:id', verifyToken, async (req, res) => {
     try {
-        if (req.user.id !== req.params.id && req.user.role !== 'admin') {
+        if (req.user.role !== 'admin') {
             return res.status(403).json({ message: "⛔ Accès refusé" });
         }
         const { name, email } = req.body;
@@ -129,72 +139,72 @@ router.delete('/admin/users/:id', verifyToken, async (req, res) => {
     }
 });
 
-// ✅ Route pour ajouter un prestataire favori
-router.post('/users/:id/favorite-provider', userController.addFavoriteProvider);
-
 // 🧪 Route de test pour inscription avec code parrain
 router.post('/referral/test', async (req, res) => {
-  try {
-    const { email, password, referralCodeUsed } = req.body;
+    try {
+        const { email, password, referralCodeUsed } = req.body;
 
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: '❌ Email déjà utilisé' });
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ message: '❌ Email déjà utilisé' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const newUser = new User({ email, password: hashedPassword });
+
+        // Générer un code unique
+        let codeUnique, existe = true;
+        while (existe) {
+            codeUnique = shortid.generate();
+            const userWithCode = await User.findOne({ referralCode: codeUnique });
+            if (!userWithCode) existe = false;
+        }
+        newUser.referralCode = codeUnique;
+
+        // Appliquer le parrainage
+        if (referralCodeUsed) {
+            const referrer = await User.findOne({ referralCode: referralCodeUsed });
+            if (referrer) {
+                referrer.referralsCount += 1;
+                referrer.referralRewards += 1;
+                await referrer.save();
+                newUser.referredBy = referralCodeUsed;
+            }
+        }
+
+        await newUser.save();
+        res.status(201).json({ message: '✅ Utilisateur inscrit avec succès', newUser });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: '❌ Erreur serveur' });
     }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ email, password: hashedPassword });
-
-    // Génère un code de parrainage unique
-    let codeUnique, existe = true;
-    while (existe) {
-      codeUnique = shortid.generate();
-      const userWithCode = await User.findOne({ referralCode: codeUnique });
-      if (!userWithCode) existe = false;
-    }
-    newUser.referralCode = codeUnique;
-
-    // Appliquer le code parrain
-    if (referralCodeUsed) {
-      const referrer = await User.findOne({ referralCode: referralCodeUsed });
-      if (referrer) {
-        referrer.referralsCount += 1;
-        referrer.referralRewards += 1;
-        await referrer.save();
-        newUser.referredBy = referralCodeUsed;
-      }
-    }
-
-    await newUser.save();
-    res.status(201).json({ message: '✅ Utilisateur inscrit avec succès', newUser });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: '❌ Erreur serveur' });
-  }
 });
 
-// ✅ Route pour voir combien de personnes sont parainées 
-router.get('/users/:id/referrals', async (req, res) => {
-  try {
-    const userId = req.params.id;
+// ✅ Voir les parrainages reçus
+router.get('/users/:id/referrals', verifyToken, async (req, res) => {
+    try {
+        if (req.user.id !== req.params.id && req.user.role !== 'admin') {
+            return res.status(403).json({ message: "⛔ Accès interdit" });
+        }
 
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable' });
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json({ message: 'Utilisateur introuvable' });
 
-    // Récupérer les utilisateurs parrainés par ce user
-    const referredUsers = await User.find({ referredBy: user.referralCode }).select('email createdAt');
+        const referredUsers = await User.find({ referredBy: user.referralCode }).select('email createdAt');
 
-    res.json({
-      referralsCount: user.referralsCount,
-      referralRewards: user.referralRewards,
-      referredUsers
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Erreur serveur' });
-  }
+        res.json({
+            referralsCount: user.referralsCount,
+            referralRewards: user.referralRewards,
+            referredUsers
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
 });
 
-// ✅ Export du router
+router.post("/upload-avatar", verifyToken, userController.uploadAvatar);
+
+
 module.exports = router;
 

@@ -1,13 +1,14 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const shortid = require('shortid'); // pour générer les codes de parrainage
-const emailService = require('../services/emailService'); // pour envoyer le code 2FA
+const { generateToken } = require("../config/jwt");
+const shortid = require('shortid');
+const emailService = require('../services/emailService');
+const ActivityLog = require("../models/ActivityLog");
 
 // 👉 Inscription
 exports.register = async (req, res) => {
   try {
-    const { email, password, referralCodeUsed } = req.body;
+    const { name, email, password, referralCodeUsed } = req.body;
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -15,9 +16,8 @@ exports.register = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ email, password: hashedPassword });
+    const newUser = new User({ name, email, password: hashedPassword });
 
-    // 🔁 Génère un code de parrainage unique
     let codeUnique, existe = true;
     while (existe) {
       codeUnique = shortid.generate();
@@ -26,58 +26,86 @@ exports.register = async (req, res) => {
     }
     newUser.referralCode = codeUnique;
 
-    // 🎁 Si un code est utilisé
     if (referralCodeUsed) {
       const referrer = await User.findOne({ referralCode: referralCodeUsed });
       if (referrer) {
         referrer.referralsCount += 1;
-        referrer.referralRewards += 1; // ou autre système
+        referrer.referralRewards += 1;
         await referrer.save();
         newUser.referredBy = referralCodeUsed;
       }
     }
 
     await newUser.save();
-    res.status(201).json({ message: "✅ Utilisateur inscrit avec succès" });
 
+    res.status(201).json({ message: "✅ Utilisateur inscrit avec succès" });
   } catch (error) {
-    console.error(error);
+    console.error("❌ Erreur à l’inscription :", error);
     res.status(500).json({ message: '❌ Erreur serveur' });
   }
 };
 
-// 🔐 Connexion avec 2FA pour les prestataires
+// 🔐 Connexion (avec 2FA si prestataire)
 exports.login = async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    if (!email || !password) {
+      return res.status(400).json({ message: "Champs requis manquants" });
+    }
+
     const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: 'Utilisateur non trouvé' });
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: 'Mot de passe invalide' });
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ message: "Email ou mot de passe incorrect" });
+    }
 
-    // 👉 Si prestataire, déclencher 2FA
-    if (user.role === 'prestataire') {
+    // ✅ 2FA obligatoire pour prestataire
+    if (user.role === "prestataire") {
       const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+      const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
       user.twoFactorCode = code;
       user.twoFactorExpires = expires;
       await user.save();
 
       await emailService.send2FACodeEmail(user.email, code);
-
-      return res.status(200).json({ message: 'Code 2FA envoyé par e-mail', requires2FA: true, userId: user._id });
+      return res.status(200).json({
+        message: "Code 2FA envoyé par e-mail",
+        requires2FA: true,
+        userId: user._id,
+      });
     }
 
-    // 🎟 Auth classique pour les autres
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.status(200).json({ token });
+    // ✅ Génération du token
+    const token = generateToken({
+      id: user._id,
+      role: user.role,
+      isAdmin: user.isAdmin || false,
+    });
 
+    // ✅ Log d'activité
+    await ActivityLog.create({
+      user: user._id,
+      action: "login",
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
+
+    // ✅ Réponse
+    res.status(200).json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isAdmin: user.isAdmin || false,
+      },
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Erreur serveur' });
+    console.error("❌ Erreur lors du login :", err);
+    res.status(500).json({ message: "❌ Erreur serveur" });
   }
 };
 
@@ -102,16 +130,36 @@ exports.verify2FA = async (req, res) => {
       return res.status(400).json({ message: "Code incorrect" });
     }
 
-    // ✅ Code valide → Authentifier
     user.twoFactorCode = null;
     user.twoFactorExpires = null;
     await user.save();
 
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.status(200).json({ token });
+    const token = jwt.sign(
+      { id: user._id, role: user.role, isAdmin: user.isAdmin || false },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    await ActivityLog.create({
+      user: user._id,
+      action: "login",
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
+
+    res.status(200).json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isAdmin: user.isAdmin || false,
+      },
+    });
 
   } catch (err) {
-    console.error(err);
+    console.error("❌ Erreur vérification 2FA :", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };

@@ -1,33 +1,69 @@
-const mongoose = require('mongoose');
-const User = require('./models/User');
+// addUsersManuel.js
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
+require("dotenv").config();
 
-mongoose.connect('mongodb://127.0.0.1:27017/cleaningApp-backend')
-  .then(() => console.log("✅ Connexion MongoDB établie"))
-  .catch(err => console.error("❌ Erreur connexion MongoDB :", err));
+const User = require("./models/User");
 
-async function addUsers() {
-  try {
+mongoose
+  .connect("mongodb://127.0.0.1:27017/cleaningApp-backend", {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(async () => {
+    console.log("✅ Connecté à MongoDB");
+
+    // Supprimer tous les comptes existants
+    await User.deleteMany({});
+    console.log("🧹 Tous les utilisateurs supprimés.");
+
+    const hashPassword = async (pwd) => await bcrypt.hash(pwd, 10);
+
     const users = [
-      { name: 'Alice Dupont', email: 'alice.dupont@example.com', password: 'password123' },
-      { name: 'Bob Martin', email: 'bob.martin@example.com', password: 'password123' },
-      { name: 'Charlie Durand', email: 'charlie.durand@example.com', password: 'password123' },
+      {
+        name: "Client Test",
+        email: "client@test.com",
+        password: await hashPassword("pass1234"),
+        role: "client",
+        isAdmin: false,
+        isProvider: false,
+        referralCode: "CLIENT123",
+      },
+      {
+        name: "Admin Client",
+        email: "adminclient@test.com",
+        password: await hashPassword("admin1234"),
+        role: "client",
+        isAdmin: true,
+        isProvider: false,
+        referralCode: "ADMINCLIENT123",
+      },
+      {
+        name: "Prestataire Test",
+        email: "prestataire@test.com",
+        password: await hashPassword("pass1234"),
+        role: "provider",
+        isAdmin: false,
+        isProvider: true,
+        referralCode: "PROVIDER123",
+      },
+      {
+        name: "Admin Prestataire",
+        email: "adminprestataire@test.com",
+        password: await hashPassword("admin1234"),
+        role: "provider",
+        isAdmin: true,
+        isProvider: true,
+        referralCode: "ADMINPRO123",
+      },
     ];
 
-    for (const user of users) {
-      const existingUser = await User.findOne({ email: user.email });
-      if (!existingUser) {
-        const newUser = new User(user);
-        await newUser.save();
-        console.log("✅ Utilisateur ajouté :", newUser);
-      } else {
-        console.log("ℹ️ Utilisateur déjà existant :", existingUser.email);
-      }
-    }
-    mongoose.connection.close();
-  } catch (error) {
-    console.error("❌ Erreur lors de l’ajout des utilisateurs :", error);
-  }
-}
-
-addUsers();
+    await User.insertMany(users);
+    console.log("✅ Comptes créés avec succès.");
+    mongoose.disconnect();
+  })
+  .catch((err) => {
+    console.error("❌ Erreur MongoDB :", err);
+    mongoose.disconnect();
+  });
 

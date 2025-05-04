@@ -3,7 +3,7 @@ const axios = require('axios');
 const router = express.Router();
 
 // URL de l'API de Machine Learning
-const ML_API_URL = 'http://localhost:5000/predict-trajet'; // Change selon ton API ML
+const ML_API_URL = 'http://localhost:5001/predict-trajet'; // Change selon ton API ML
 
 // Route pour récupérer un trajet optimisé
 router.post('/optimiser-trajet', async (req, res) => {

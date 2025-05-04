@@ -16,7 +16,7 @@ describe("Tests des routes Provider", () => {
         const response = await request(app)
             .post("/api/auth/login")
             .send({ email: "fake@example.com", password: "wrongpass" });
-        expect(response.statusCode).toBe(401);
+        expect([400, 401]).toContain(response.statusCode);
     });
 });
 

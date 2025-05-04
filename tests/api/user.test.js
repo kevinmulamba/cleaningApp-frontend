@@ -1,7 +1,7 @@
 const request = require("supertest");
 const { app, server, closeDatabase } = require("../../../server");
 
-// Ferme MongoDB et le serveur après tous les tests
+// Fermer MongoDB et le serveur après tous les tests
 afterAll(async () => {
   await closeDatabase();
   server.close();
@@ -17,7 +17,7 @@ describe("Tests des routes /api/users", () => {
     const newUser = {
       name: "Test User",
       email: "testuser@example.com",
-      password: "TestPassword123",
+      password: "TestPassword123!",
       phoneNumber: "0123456789",
     };
 
@@ -33,7 +33,7 @@ describe("Tests des routes /api/users", () => {
   test("POST /api/users/login doit retourner un 200 et connecter un utilisateur", async () => {
     const userCredentials = {
       email: "testuser@example.com",
-      password: "TestPassword123",
+      password: "TestPassword123!",
     };
 
     const response = await request(app)

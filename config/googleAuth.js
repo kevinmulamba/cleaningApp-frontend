@@ -1,15 +1,42 @@
-const { google } = require('googleapis');
-const { auth } = require('google-auth-library');
-const path = require('path');
+const passport = require("passport");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const User = require("../models/User");
 
-// Charger les credentials depuis le fichier JSON
-const CREDENTIALS_PATH = process.env.GOOGLE_CREDENTIALS_PATH;
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: "/api/auth/google/callback",
+    },
+    async (accessToken, refreshToken, profile, done) => {
+      try {
+        let user = await User.findOne({ googleId: profile.id });
 
-const authClient = new google.auth.GoogleAuth({
-  keyFile: CREDENTIALS_PATH,
-  scopes: ['https://www.googleapis.com/auth/calendar'],
+        if (!user) {
+          user = new User({
+            fullName: profile.displayName,
+            email: profile.emails[0].value,
+            googleId: profile.id,
+            avatar: profile.photos[0].value,
+            role: "client", // ou "prestataire", à adapter plus tard si besoin
+          });
+          await user.save();
+        }
+
+        return done(null, user);
+      } catch (err) {
+        return done(err, null);
+      }
+    }
+  )
+);
+
+// (Optionnel) sérialisation
+passport.serializeUser((user, done) => {
+  done(null, user.id);
 });
-
-// Exporter l'authentification pour l'utiliser ailleurs
-module.exports = authClient;
+passport.deserializeUser((id, done) => {
+  User.findById(id).then((user) => done(null, user));
+});
 

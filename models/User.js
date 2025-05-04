@@ -5,7 +5,7 @@ const UserSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
-    trim: true // Supprime les espaces inutiles
+    trim: true, // Supprime les espaces inutiles
   },
   email: {
     type: String,
@@ -18,48 +18,63 @@ const UserSchema = new mongoose.Schema({
   password: {
     type: String,
     required: true,
-    minlength: 6 // Longueur minimale du mot de passe
+    minlength: 6, // Longueur minimale du mot de passe
   },
+
+  // ✅ Rôle de l'utilisateur
   role: {
     type: String,
-    enum: ['user', 'admin', 'prestataire'], // Ajoute 'prestataire' si ce n'était pas déjà présent
-    default: 'user' // Par défaut, utilisateur normal
+    enum: ['client', 'provider', 'admin'],
+    default: 'client',
   },
-  favoris: [{
+
+  // ✅ Admin
+  isAdmin: {
+    type: Boolean,
+    default: false,
+  },
+
+  // ✅ Premium
+  isPremium: {
+    type: Boolean,
+    default: false, // Tous les utilisateurs ne sont pas premium par défaut
+  },
+
+  // ✅ Liste des prestataires favoris
+  favoriteProviders: [{
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Provider'
-  }], // ✅ Ajout du champ favoris
+    ref: 'User', // Référence au modèle User
+  }],
 
   // 🪄 Champs pour le système de parrainage
   referralCode: {
     type: String,
-    unique: true
+    unique: true,
   },
   referredBy: {
-    type: String, // Code de parrainage utilisé lors de l’inscription
-    default: null
+    type: String,
+    default: null,
   },
   referralsCount: {
-    type: Number, // Nombre de personnes parrainées
-    default: 0
+    type: Number,
+    default: 0,
   },
   referralRewards: {
-    type: Number, // Crédits ou récompenses gagnés
-    default: 0
+    type: Number,
+    default: 0,
   },
 
-  // 🔐 Champs pour la double authentification (2FA)
+  // 🔐 Double authentification (2FA)
   twoFactorCode: {
     type: String,
   },
   twoFactorExpires: {
     type: Date,
-  }
+  },
 
-}, { timestamps: true }); // ✅ Ajoute createdAt et updatedAt automatiquement
+}, { timestamps: true }); // createdAt & updatedAt auto
 
-// ✅ Création du modèle utilisateur
+// ✅ Création du modèle
 const User = mongoose.model('User', UserSchema);
-
 module.exports = User;
 

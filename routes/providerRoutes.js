@@ -6,6 +6,8 @@ const getDistanceMatrix = require("../utils/googleMaps");
 const authMiddleware = require("../middlewares/authMiddleware");
 const Provider = require("../models/Provider");
 const PremiumSubscription = require("../models/PremiumSubscription");
+const Reservation = require('../models/Reservation');
+const verifyToken = require('../middlewares/verifyToken');
 
 const router = express.Router();
 
@@ -80,21 +82,29 @@ router.post("/update-location", async (req, res) => {
 });
 
 // ✅ Route pour récupérer la position actuelle d’un prestataire
-router.get("/:id/location", async (req, res) => {
+router.get('/:id/location', async (req, res) => {
   try {
-    const provider = await Provider.findById(req.params.id);
+    const id = new mongoose.Types.ObjectId(req.params.id); // ✅ ici
+    const provider = await Provider.findById(id);
 
-    if (!provider || !provider.location) {
-      return res.status(404).json({ message: "Prestataire ou position introuvable" });
+    if (
+      !provider ||
+      !provider.location ||
+      !provider.location.coordinates ||
+      provider.location.coordinates.length !== 2
+    ) {
+      return res.status(404).json({ message: "❌ Prestataire ou position introuvable" });
     }
 
-    res.json({
-      lat: provider.location.coordinates[1],
-      lng: provider.location.coordinates[0]
+    const [lng, lat] = provider.location.coordinates;
+
+    res.status(200).json({
+      location: { lat, lng },
+      providerName: provider.name,
     });
   } catch (error) {
     console.error("❌ Erreur récupération position :", error.message);
-    res.status(500).json({ message: "Erreur serveur", error: error.message });
+    res.status(500).json({ message: "❌ Erreur serveur", error: error.message });
   }
 });
 
@@ -299,6 +309,104 @@ router.get('/check-provider-premium/:providerId', async (req, res) => {
     res.json({ isPremium: !!subscription });
   } catch (error) {
     res.status(500).json({ message: "❌ Erreur lors de la vérification Premium", error });
+  }
+});
+
+// ✅ Route pour récupérer la position actuelle d’un prestataire
+router.get('/:id/location', async (req, res) => {
+  try {
+    const provider = await Provider.findById(req.params.id);
+    if (!provider || !provider.location) {
+      return res.status(404).json({ message: '📍 Localisation non trouvée pour ce prestataire' });
+    }
+
+    const [lng, lat] = provider.location.coordinates;
+
+    res.status(200).json({
+      location: {
+        lat,
+        lng
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération de la localisation :', error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
+// ✅ Route : Nombre de prestations terminées cette semaine
+router.get('/weekly-count/:providerId', async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay()); // dimanche
+
+    const count = await Reservation.countDocuments({
+      provider: providerId,
+      status: "confirmed",
+      date: { $gte: startOfWeek },
+    });
+
+    res.json({ count });
+  } catch (error) {
+    console.error("❌ Erreur weekly-count :", error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
+// ✅ Voir les prestataires favoris
+router.get("/favorites", verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id; // ✅ récupéré depuis le token
+
+    if (!userId) {
+      return res.status(400).json({ message: "ID utilisateur manquant" });
+    }
+
+    const user = await User.findById(userId).populate("favoris");
+    if (!user) {
+      return res.status(404).json({ message: "Utilisateur introuvable" });
+    }
+
+    res.json(user.favoris);
+  } catch (err) {
+    console.error("❌ Erreur lors de la récupération des favoris :", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
+// ✅ Ajouter un prestataire aux favoris
+router.post('/favorites/:providerId', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    const providerId = req.params.providerId;
+
+    if (!user.favoris.includes(providerId)) {
+      user.favoris.push(providerId);
+      await user.save();
+    }
+
+    res.status(200).json({ _id: providerId });
+  } catch (error) {
+    console.error("❌ Erreur POST favoris :", error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
+// ✅ Retirer un prestataire des favoris
+router.delete('/favorites/:providerId', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    const providerId = req.params.providerId;
+
+    user.favoris = user.favoris.filter(id => id.toString() !== providerId);
+    await user.save();
+
+    res.status(200).json({ _id: providerId });
+  } catch (error) {
+    console.error("❌ Erreur DELETE favoris :", error);
+    res.status(500).json({ message: "Erreur serveur" });
   }
 });
 

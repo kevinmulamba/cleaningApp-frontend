@@ -2,8 +2,9 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
-const authMiddleware = require("../middlewares/authMiddleware");
+const verifyToken = require("../middlewares/authMiddleware");
 const authController = require("../controllers/authController");
+const passport = require("passport");
 
 const router = express.Router();
 
@@ -39,7 +40,7 @@ router.post("/login", authController.login);
 router.post("/verify-2fa", authController.verify2FA);
 
 // ✅ Récupération du profil connecté
-router.get("/me", authMiddleware, async (req, res) => {
+router.get("/me", verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
     if (!user)
@@ -53,7 +54,7 @@ router.get("/me", authMiddleware, async (req, res) => {
 });
 
 // ✅ Route générique de profil (alternative Frontend)
-router.get("/profile", authMiddleware, async (req, res) => {
+router.get("/profile", verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
     if (!user)
@@ -67,7 +68,7 @@ router.get("/profile", authMiddleware, async (req, res) => {
 });
 
 // ✅ 🔥 TEMPORAIRE : route sans filtrage de rôle pour tester
-router.get("/provider-profile", authMiddleware, async (req, res) => {
+router.get("/provider-profile", verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
     if (!user)
@@ -79,6 +80,38 @@ router.get("/provider-profile", authMiddleware, async (req, res) => {
     res.status(500).json({ message: "❌ Erreur serveur", error });
   }
 });
+
+// 🚀 Route d’initiation Google Login
+router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+
+// 📥 Callback Google après connexion
+router.get("/google/callback",
+  passport.authenticate("google", {
+    failureRedirect: "/auth?error=google",
+    session: false, // Important si tu utilises JWT
+  }),
+  (req, res) => {
+    const jwt = require("jsonwebtoken");
+
+    // 🧠 Vérifie que req.user existe bien
+    if (!req.user || !req.user._id || !req.user.role) {
+      console.error("❌ Données utilisateur manquantes après Google Auth");
+      return res.redirect(`${process.env.FRONTEND_URL}/auth?error=missing-user`);
+    }
+
+    // ✅ Créer le token JWT
+    const token = jwt.sign(
+      { id: req.user._id, role: req.user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    // ✅ Rediriger vers le frontend avec le token et le rôle
+    const redirectUrl = `${process.env.FRONTEND_URL}/auth-success?token=${token}&role=${req.user.role}`;
+    console.log("🔁 Redirection avec :", redirectUrl);
+    return res.redirect(redirectUrl);
+  }
+);
 
 module.exports = router;
 

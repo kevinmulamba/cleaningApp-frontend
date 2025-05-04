@@ -52,7 +52,7 @@ router.post('/create-checkout-session', async (req, res) => {
         },
       ],
       metadata: {
-        userId: reservation.user || 'non spécifié',
+        userId: reservation.user.toString() || 'non spécifié',
         reservationId: reservation._id.toString(),
       },
       success_url: 'https://ton-domaine.com/success',

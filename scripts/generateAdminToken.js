@@ -1,14 +1,13 @@
 const mongoose = require('mongoose');
-const jwt = require('jsonwebtoken');
 require('dotenv').config();
-
+const { generateToken } = require('../config/jwt');
 const User = require('../models/User');
 
 const run = async () => {
   await mongoose.connect(process.env.MONGO_URI);
   console.log("✅ Connecté à MongoDB");
 
-  // 🔎 Trouve un utilisateur admin (ou modifie avec ton email admin)
+  // 🔍 Trouver un admin
   const admin = await User.findOne({ role: 'admin' });
 
   if (!admin) {
@@ -16,13 +15,14 @@ const run = async () => {
     return process.exit(1);
   }
 
-  const token = jwt.sign(
-    { id: admin._id, role: admin.role },
-    process.env.JWT_SECRET,
-    { expiresIn: '1h' }
-  );
+  // ✅ Générer le token via config/jwt.js
+  const token = generateToken({
+    id: admin._id,
+    role: admin.role,
+    isAdmin: true,
+  });
 
-  console.log("🎫 Token JWT admin :\n");
+  console.log("📬 Token JWT admin :\n");
   console.log(token);
 
   process.exit();
