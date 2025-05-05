@@ -5,3 +5,5 @@ coverage/
 
 node_modules/
 frontend/node_modules/
+.env
+config/cleaningapp-firebase.json
