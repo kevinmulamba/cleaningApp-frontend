@@ -3,8 +3,6 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import Loader from "./components/Loader";
 import toast from 'react-hot-toast';
-import Lightbox from 'react-image-lightbox';
-import 'react-image-lightbox/style.css';
 import io from 'socket.io-client';
 
 const socket = io(process.env.REACT_APP_API_URL);
@@ -181,20 +179,6 @@ const DashboardPrestataire = () => {
         </ul>
       )}
 
-      {lightboxOpen && (
-        <Lightbox
-          mainSrc={lightboxImages[lightboxIndex]}
-          nextSrc={lightboxImages[(lightboxIndex + 1) % lightboxImages.length]}
-          prevSrc={lightboxImages[(lightboxIndex + lightboxImages.length - 1) % lightboxImages.length]}
-          onCloseRequest={() => setLightboxOpen(false)}
-          onMovePrevRequest={() =>
-            setLightboxIndex((lightboxIndex + lightboxImages.length - 1) % lightboxImages.length)
-          }
-          onMoveNextRequest={() =>
-            setLightboxIndex((lightboxIndex + 1) % lightboxImages.length)
-          }
-        />
-      )}
     </div>
   );
 };
