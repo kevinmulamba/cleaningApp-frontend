@@ -34,3 +34,5 @@ root.render(
 // ✅ Web Vitals (perf tracking facultatif)
 reportWebVitals();
 
+// ✅ Déclenchement léger pour redeploy Vercel (mai 2025)
+
